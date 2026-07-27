@@ -8,9 +8,9 @@ def test_auth_manager_initialization():
 
 
 def test_successful_login():
+    from config import cfg
     am = AuthManager()
-    # Default RBAC_USERS includes admin:stealth2026:admin
-    role = am.authenticate("admin", "stealth2026")
+    role = am.authenticate(cfg.DASHBOARD_USER, cfg.DASHBOARD_PASS)
     assert role == "admin"
 
 
@@ -21,8 +21,9 @@ def test_failed_login():
 
 
 def test_token_generation_and_validation():
+    from config import cfg
     am = AuthManager()
-    token = am.generate_token("admin", "admin")
+    token = am.generate_token(cfg.DASHBOARD_USER, cfg.DASHBOARD_USER)
     assert token is not None
 
     payload = am.decode_token(token)
