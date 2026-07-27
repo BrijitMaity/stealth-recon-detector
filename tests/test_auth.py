@@ -4,7 +4,8 @@ from auth import AuthManager
 
 def test_auth_manager_initialization():
     am = AuthManager()
-    assert "admin" in am.users
+    assert am.expiry_hours > 0
+    assert am.secret is not None
 
 
 def test_successful_login():
