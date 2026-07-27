@@ -30,8 +30,8 @@ class AuthManager:
         import os
         self.totp_secret = os.environ.get("STEALTH_TOTP_SECRET")
         if not self.totp_secret:
-            self.totp_secret = "JBSWY3DPEHPK3PXP"
-            log.warning(f"STEALTH_TOTP_SECRET not set in environment. Using hardcoded fallback.")
+            self.totp_secret = pyotp.random_base32()
+            log.warning(f"STEALTH_TOTP_SECRET not set in environment. Generated temporary random TOTP secret for this session.")
         self.totp = pyotp.TOTP(self.totp_secret)
         uri = self.totp.provisioning_uri(name="admin@cyfocus", issuer_name="CyFocus SOC")
 
@@ -39,8 +39,7 @@ class AuthManager:
         
         # Print generated credentials for the user
         log.info(f"Admin Username: {cfg.DASHBOARD_USER}")
-        log.info(f"Admin Password: {cfg.DASHBOARD_PASS}")
-        log.info(f"TOTP 2FA Secret for Admin: {self.totp_secret}")
+        log.info(f"Admin Password: [HIDDEN - Check Environment Variables]")
         log.info(f"TOTP 2FA Provisioning URI: {uri}")
 
     def _parse_users(self, users_str: str) -> dict:

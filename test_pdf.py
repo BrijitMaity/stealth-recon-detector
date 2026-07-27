@@ -1,12 +1,21 @@
 import requests
 import pyotp
 
+import os
+
 # 1. Login to get cookie
 url_login = "http://localhost:5000/login"
-totp = pyotp.TOTP("JBSWY3DPEHPK3PXP").now()
+totp_secret = os.environ.get("STEALTH_TOTP_SECRET", "")
+admin_pass = os.environ.get("STEALTH_DASHBOARD_PASS", "")
+
+if not totp_secret or not admin_pass:
+    print("Please set STEALTH_TOTP_SECRET and STEALTH_DASHBOARD_PASS to run this test.")
+    exit(1)
+
+totp = pyotp.TOTP(totp_secret).now()
 data = {
     "username": "admin",
-    "password": "adminpass",
+    "password": admin_pass,
     "totp_code": totp
 }
 session = requests.Session()
