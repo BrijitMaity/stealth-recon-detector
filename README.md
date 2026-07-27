@@ -154,9 +154,9 @@ gen_ai_sketch_detector/
 └── CSV/                    # ML training datasets
 ```
 
-## Academic Context
+## Project Context
 
-Developed by Brijit Maity as a major academic project at Amity University Kolkata (2025). The system demonstrates a novel multi-layer AI architecture combining DPI + Random Forest ML + GenAI for stealth network reconnaissance detection, with a 120-column research-grade dataset.
+Developed by Brijit Maity as a major personal project (2025). The system demonstrates a novel multi-layer AI architecture combining DPI + Random Forest ML + GenAI for stealth network reconnaissance detection, with a 120-column research-grade dataset.
 
 ## License
 
