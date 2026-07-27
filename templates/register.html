@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyFocus | Register</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --surface: rgba(30, 41, 59, 0.7);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-secondary: #94a3b8;
+            --cyan: #00f0ff;
+            --cyan-glow: rgba(0, 240, 255, 0.2);
+            --font-main: 'Inter', sans-serif;
+            --font-display: 'Space Grotesk', sans-serif;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(255, 51, 102, 0.05) 0%, transparent 50%);
+        }
+
+        .login-card {
+            background: var(--surface);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 3rem;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            text-align: center;
+        }
+
+        .logo {
+            font-family: var(--font-display);
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--cyan);
+            margin-bottom: 0.5rem;
+            text-shadow: 0 0 20px var(--cyan-glow);
+            letter-spacing: -1px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+            letter-spacing: 1px;
+        }
+
+        .input-group {
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-main);
+            font-family: var(--font-main);
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .input-group input:focus {
+            border-color: var(--cyan);
+            box-shadow: 0 0 0 3px var(--cyan-glow);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 0.875rem;
+            background: var(--text-main);
+            color: var(--bg-color);
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-family: var(--font-display);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 1rem;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
+        }
+
+        .error-message {
+            color: #ff3366;
+            font-size: 0.85rem;
+            margin-top: 1.5rem;
+            min-height: 20px;
+            background: rgba(255, 51, 102, 0.1);
+            padding: 0.5rem;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="logo">CyFocus</div>
+        <div class="subtitle">REGISTER NEW OPERATOR</div>
+        
+        <form method="POST" action="/register" autocomplete="off">
+            <!-- Hidden fake fields to absorb browser autofill -->
+            <input style="display:none" type="text" name="fake_username">
+            <input style="display:none" type="password" name="fake_password">
+
+            <div class="input-group">
+                <label>Operator ID</label>
+                <input type="text" name="username" placeholder="Choose an ID" required autofocus autocomplete="nope" readonly onfocus="this.removeAttribute('readonly');">
+            </div>
+            
+            <div class="input-group">
+                <label>Clearance Code</label>
+                <input type="password" name="password" placeholder="••••••••" minlength="6" required autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly');">
+            </div>
+
+            <div class="input-group">
+                <label>Confirm Clearance Code</label>
+                <input type="password" name="confirm_password" placeholder="••••••••" minlength="6" required autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly');">
+            </div>
+            
+            <button type="submit" class="btn">REGISTER</button>
+            
+            {% if error %}
+            <div class="error-message">{{ error }}</div>
+            {% endif %}
+            
+            <div style="margin-top: 1.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                Already have an ID? <a href="/login" style="color: var(--cyan); text-decoration: none;">Login here</a>
+            </div>
+        </form>
+    </div>
+</body>
+</html>

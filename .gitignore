@@ -1,0 +1,59 @@
+# ── Virtual environments ───────────────────────────────────────────
+venv/
+venv2/
+venv_broken/
+venv_fix/
+venv_new/
+.venv/
+venv4/
+
+# ── Python bytecode ───────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+# ── Large data files (keep originals, exclude from VCS) ───────────
+pcap_archive/
+*.archived
+*.csv
+*.json
+*.xlsx
+*.pdf
+
+# ── Model artifacts ───────────────────────────────────────────────
+*.pkl
+
+# ── SQLite state database ─────────────────────────────────────────
+*.db
+*.db-shm
+*.db-wal
+
+# ── Application logs ──────────────────────────────────────────────
+*.log
+*.log.*
+
+# ── OS / IDE artifacts ────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── Pytest / coverage ─────────────────────────────────────────────
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ── Distribution ──────────────────────────────────────────────────
+dist/
+build/
+*.egg-info/
+
+# ── Sensitive & Scratch ───────────────────────────────────────────
+.env
+../backup_sensitive/
+docs/
+scratch/

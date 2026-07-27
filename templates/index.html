@@ -1,0 +1,2057 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Stealth Recon Detection SOC</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/globe.gl"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* CyFocus Premium Dark Theme */
+            --bg-base: #0B0F19;
+            --bg-surface: rgba(20, 25, 35, 0.6);
+            --bg-surface-hover: rgba(30, 38, 52, 0.7);
+            
+            --border-subtle: rgba(255, 255, 255, 0.05);
+            --border-glow: rgba(0, 240, 255, 0.15);
+            
+            --cyan: #00f0ff;
+            --cyan-glow: rgba(0, 240, 255, 0.4);
+            --purple: #8a2be2;
+            --red: #ff3366;
+            --green: #00E676;
+            --yellow: #FFD700;
+            
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            
+            --font-main: 'Inter', sans-serif;
+            --font-display: 'Orbitron', sans-serif;
+        }
+
+        body.light-mode {
+            --bg-base: #f0f4f8;
+            --bg-surface: rgba(255, 255, 255, 0.85);
+            --bg-surface-hover: rgba(255, 255, 255, 1);
+            
+            --border-subtle: rgba(0, 0, 0, 0.08);
+            --border-glow: rgba(2, 132, 199, 0.15);
+            
+            --cyan: #0284c7;
+            --cyan-glow: rgba(2, 132, 199, 0.2);
+            --purple: #7e22ce;
+            --red: #e11d48;
+            --green: #16a34a;
+            --yellow: #d97706;
+            
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #64748b;
+        }
+
+        html {
+            font-size: 85%; /* Slight scale down for dashboard feel */
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-subtle) transparent;
+        }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 3px; }
+
+        body {
+            background-color: var(--bg-base);
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.03), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(138, 43, 226, 0.03), transparent 25%);
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+        }
+
+        /* --- Sidebar --- */
+        .sidebar {
+            width: 80px;
+            background: var(--bg-surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-right: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 0;
+            z-index: 100;
+        }
+
+        .sidebar-logo {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--cyan), var(--purple));
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 3rem;
+            box-shadow: 0 0 15px var(--cyan-glow);
+            color: #fff;
+            font-family: var(--font-display);
+            font-weight: 900;
+            font-size: 1.2rem;
+        }
+
+        .sidebar-item {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar-item.active, .sidebar-item:hover {
+            background: var(--border-subtle);
+            color: var(--cyan);
+            box-shadow: inset 2px 0 0 var(--cyan);
+        }
+
+        /* --- Main Content Area --- */
+        .main-wrapper {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        /* --- Topbar --- */
+        .topbar {
+            height: 70px;
+            padding: 0 2rem;
+            background: transparent;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .dashboard-title {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--cyan);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--cyan-glow);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 var(--cyan-glow); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 240, 255, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 240, 255, 0); }
+        }
+
+        .topbar-controls {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .control-btn {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            font-weight: 500;
+            font-size: 0.8rem;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-btn:hover {
+            border-color: var(--cyan);
+            box-shadow: 0 0 15px var(--cyan-glow);
+            transform: translateY(-1px);
+        }
+
+        .control-btn.accent {
+            background: linear-gradient(135deg, rgba(0,240,255,0.1), transparent);
+            border-color: rgba(0, 240, 255, 0.3);
+            color: var(--cyan);
+        }
+
+        /* --- Grid Layout --- */
+        .dashboard-content {
+            padding: 1.5rem 2rem;
+            flex-grow: 1;
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            grid-template-rows: auto 1fr;
+            gap: 1.5rem;
+            overflow-y: auto;
+        }
+
+        /* --- Glass Cards --- */
+        .glass-card {
+            background: var(--bg-surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .glass-card:hover {
+            border-color: var(--border-glow);
+            transform: translateY(-2px);
+        }
+
+        /* --- KPI Cards --- */
+        .kpi-row {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+        }
+
+        .kpi-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .kpi-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(255,255,255,0.05);
+        }
+
+        .kpi-value {
+            font-family: var(--font-display);
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .kpi-trend {
+            margin-top: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* Color-specific KPIs */
+        .kpi-card-cyan .kpi-icon { color: var(--cyan); box-shadow: 0 0 10px var(--cyan-glow); }
+        .kpi-card-red .kpi-icon { color: var(--red); box-shadow: 0 0 10px rgba(255, 51, 102, 0.2); }
+        .kpi-card-yellow .kpi-icon { color: var(--yellow); box-shadow: 0 0 10px rgba(255, 215, 0, 0.2); }
+        .kpi-card-green .kpi-icon { color: var(--green); box-shadow: 0 0 10px rgba(0, 230, 118, 0.2); }
+
+        /* --- Main Sections --- */
+        .chart-section {
+            grid-column: 1 / 3;
+            min-height: 300px;
+        }
+
+        .topology-section {
+            grid-column: 3 / 5;
+            min-height: 300px;
+        }
+
+        .globe-section {
+            grid-column: 5 / 7;
+            min-height: 300px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .soc-terminal-section {
+            grid-column: 1 / 3;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-height: 300px;
+        }
+
+        .terminal-section {
+            grid-column: 3 / -1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-height: 300px;
+        }
+
+        .mitre-section {
+            grid-column: 1 / -1;
+            display: flex;
+            flex-direction: column;
+            min-height: 250px;
+        }
+        .mitre-grid {
+            display: grid;
+            grid-template-columns: repeat(14, 1fr);
+            gap: 4px;
+            flex-grow: 1;
+            overflow-x: auto;
+        }
+        .mitre-col {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 100px;
+        }
+        .mitre-header {
+            background: rgba(255,255,255,0.05);
+            padding: 8px;
+            font-size: 0.7rem;
+            text-align: center;
+            font-family: var(--font-display);
+            color: var(--cyan);
+            border: 1px solid var(--border-subtle);
+        }
+        .mitre-cell {
+            background: rgba(255, 51, 102, var(--heat-opacity, 0));
+            border: 1px solid var(--border-subtle);
+            padding: 6px;
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-align: center;
+            border-radius: 2px;
+            transition: background-color 0.3s;
+            position: relative;
+        }
+        .mitre-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: var(--red);
+            color: #fff;
+            font-size: 0.55rem;
+            font-weight: bold;
+            padding: 2px 4px;
+            border-radius: 4px;
+            display: none;
+        }
+        .mitre-cell.active {
+            border-color: var(--red);
+            color: #fff;
+            box-shadow: 0 0 5px rgba(255,51,102,0.3);
+        }
+
+        .section-title {
+            font-family: var(--font-display);
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* --- Terminal / Log Feed --- */
+        .log-feed {
+            flex-grow: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            padding-right: 8px;
+        }
+
+        .log-item {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 1rem;
+            position: relative;
+            border-left: 3px solid var(--cyan);
+            animation: slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            opacity: 0;
+            transform: translateX(20px);
+        }
+
+        @keyframes slideIn {
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .log-item.threat {
+            border-left-color: var(--red);
+            background: linear-gradient(90deg, rgba(255, 51, 102, 0.05), transparent);
+        }
+
+        .log-header-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.8rem;
+        }
+
+        .log-time {
+            color: var(--text-muted);
+            font-family: monospace;
+        }
+
+        .log-method {
+            font-weight: 600;
+        }
+        .log-item .log-method { color: var(--cyan); }
+        .log-item.threat .log-method { color: var(--red); }
+
+        .log-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+
+        .log-grid span { font-family: monospace; color: var(--text-primary); }
+
+        .log-reason {
+            font-size: 0.8rem;
+            color: var(--text-primary);
+            line-height: 1.4;
+        }
+
+        .llm-enrichment {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(255, 215, 0, 0.05);
+            border-left: 2px solid var(--yellow);
+            border-radius: 4px;
+            font-size: 0.8rem;
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+
+        .llm-enrichment strong { color: var(--yellow); font-family: var(--font-display); letter-spacing: 0.5px;}
+
+    </style>
+</head>
+
+<body>
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-logo">CF</div>
+        <div class="sidebar-item active" title="Dashboard" onclick="switchTab('dashboard', this)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+        </div>
+        <div class="sidebar-item" title="Threat Logs" onclick="switchTab('logs', this)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        </div>
+        <div class="sidebar-item" title="Settings" onclick="switchTab('settings', this)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </div>
+    </aside>
+
+    <div class="main-wrapper">
+        <!-- TOPBAR -->
+        <header class="topbar">
+            <div class="dashboard-title">
+                <div class="pulse-dot"></div>
+                CyFocus Command Center
+            </div>
+            
+            <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; padding: 0 2rem; gap: 10px;">
+                <span style="color: var(--cyan); font-family: monospace; font-size: 0.8rem;">TIME MACHINE</span>
+                <input type="range" id="time-slider" min="0" max="100" value="100" style="width: 250px; cursor: pointer;" onchange="handleTimeMachine(this.value)" oninput="document.getElementById('time-display').innerText = (this.value == 100) ? 'LIVE' : '-'+(100-this.value)+' mins'">
+                <span id="time-display" style="color: var(--text-primary); font-family: monospace; font-size: 0.8rem; width: 60px;">LIVE</span>
+            </div>
+            
+            <div class="topbar-controls">
+                <div>UPTIME: <span id="uptime-display" style="color: var(--cyan); font-family: var(--font-display);">00:00:00</span></div>
+                
+                <button class="control-btn" onclick="openBuilderModal()" title="Signature Builder">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 20h9"></path>
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                    </svg>
+                </button>
+                
+                <button class="control-btn" id="sound-toggle" onclick="toggleSound()" title="Toggle Sound Alerts">
+                    <svg id="sound-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    </svg>
+                </button>
+                
+                <button class="control-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle Light/Dark Mode">
+                    <svg id="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
+                
+                <button class="control-btn accent" onclick="downloadReport(this, '/api/export')" title="Download Daily Threat Report CSV">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    CSV
+                </button>
+                <button class="control-btn accent" style="background: rgba(255, 51, 102, 0.1); border-color: var(--red); color: var(--red);" onclick="downloadReport(this, '/api/export-pdf')" title="Download Daily Threat Report PDF">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    PDF
+                </button>
+                <button class="control-btn" style="border-color: var(--yellow); color: var(--yellow);" onclick="viewSignatures()" title="View Active DPI Signatures">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    SIGNATURES DB
+                </button>
+
+                <div class="user-profile-menu" style="position: relative; margin-left: 10px;">
+                    <div onclick="toggleProfileMenu()" style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--cyan), var(--purple)); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 0.8rem; cursor: pointer; user-select: none;" title="View Profile">{{ current_user[:2].upper() if current_user else 'AD' }}</div>
+                    
+                    <div id="profile-dropdown" style="display: none; position: absolute; right: 0; top: 45px; background: rgba(10, 15, 30, 0.95); backdrop-filter: blur(10px); border: 1px solid var(--border-subtle); border-radius: 8px; width: 220px; padding: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 1000; flex-direction: column; gap: 10px;">
+                        <div style="border-bottom: 1px solid var(--border-subtle); padding-bottom: 12px; margin-bottom: 5px;">
+                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px;">Operator ID</div>
+                            <div style="font-weight: bold; color: white; font-size: 1.1rem; margin-top: 4px;">{{ current_user if current_user else 'Admin' }}</div>
+                            <div style="display: inline-block; padding: 2px 8px; background: rgba(0, 240, 255, 0.1); color: var(--cyan); border: 1px solid rgba(0, 240, 255, 0.2); border-radius: 4px; font-size: 0.75rem; margin-top: 8px; font-weight: 500;">
+                                Level 4 Clearance
+                            </div>
+                        </div>
+                        <a href="/logout" style="display: flex; align-items: center; gap: 10px; color: var(--red); text-decoration: none; padding: 10px; border-radius: 6px; transition: background 0.2s; font-size: 0.9rem; font-weight: 500;" onmouseover="this.style.background='rgba(255, 51, 102, 0.1)'" onmouseout="this.style.background='transparent'">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                            Terminate Session
+                        </a>
+                    </div>
+                </div>
+                <script>
+                    function toggleProfileMenu() {
+                        const menu = document.getElementById('profile-dropdown');
+                        menu.style.display = menu.style.display === 'none' || menu.style.display === '' ? 'flex' : 'none';
+                    }
+                    
+                    document.addEventListener('click', function(event) {
+                        const profileMenu = document.querySelector('.user-profile-menu');
+                        const dropdown = document.getElementById('profile-dropdown');
+                        if (profileMenu && !profileMenu.contains(event.target)) {
+                            dropdown.style.display = 'none';
+                        }
+                    });
+                </script>
+            </div>
+        </header>
+
+        <!-- MAIN GRID -->
+        <main id="dashboard-content" class="dashboard-content">
+            
+            <!-- KPI ROW -->
+            <div class="kpi-row">
+                <div class="glass-card kpi-card-cyan" style="position: relative; overflow: hidden;">
+                    <div class="kpi-header">
+                        <span>Total Packets</span>
+                        <div class="kpi-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg></div>
+                    </div>
+                    <div class="kpi-value" id="stat-total">0</div>
+                    <div class="kpi-trend"><span style="color: var(--green);">+12%</span> active scanning</div>
+                    <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 50px; opacity: 0.3;">
+                        <canvas id="sparkline-total"></canvas>
+                    </div>
+                </div>
+
+                <div class="glass-card kpi-card-red" style="position: relative; overflow: hidden;">
+                    <div class="kpi-header">
+                        <span>Threats Blocked</span>
+                        <div class="kpi-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg></div>
+                    </div>
+                    <div class="kpi-value" id="stat-threats">0</div>
+                    <div class="kpi-trend"><span style="color: var(--red);">Critical</span> alerts captured</div>
+                    <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 50px; opacity: 0.3;">
+                        <canvas id="sparkline-threats"></canvas>
+                    </div>
+                </div>
+
+                <div class="glass-card kpi-card-yellow">
+                    <div class="kpi-header">
+                        <span>Active Engine</span>
+                        <div class="kpi-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></div>
+                    </div>
+                    <div class="kpi-value" style="font-size: 1.5rem;">DistilBERT</div>
+                    <div class="kpi-trend">Random Forest + DPI</div>
+                </div>
+
+                <div class="glass-card kpi-card-green">
+                    <div class="kpi-header">
+                        <span>System Health</span>
+                        <div class="kpi-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+                    </div>
+                    <div class="kpi-value">ONLINE</div>
+                    <div class="kpi-trend" id="health-status">Latency: < 5ms</div>
+                </div>
+            </div>
+
+            <!-- CHART SECTION -->
+            <div class="glass-card chart-section">
+                <div class="section-title">
+                    Threat Distribution Analysis
+                </div>
+                <div style="position: relative; width: 100%; height: 85%;">
+                    <canvas id="threatChart"></canvas>
+                </div>
+            </div>
+
+            <!-- TOPOLOGY SECTION -->
+            <div class="glass-card topology-section">
+                <div class="section-title">
+                    Network Topography
+                    <span style="font-size: 0.75rem; color: var(--cyan);">Live Nodes</span>
+                </div>
+                <div id="network-topology" style="width: 100%; height: 100%; min-height: 250px;"></div>
+            </div>
+
+            <!-- GLOBE SECTION -->
+            <div class="glass-card globe-section">
+                <div class="section-title">
+                    Global Threat Map
+                    <span style="font-size: 0.75rem; color: var(--red);">Live Geo-IP</span>
+                </div>
+                <div id="globe-viz" style="flex-grow: 1; position: relative; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center;"></div>
+            </div>
+
+            <!-- SOC COMMAND TERMINAL -->
+            <div class="glass-card soc-terminal-section">
+                <div class="section-title">
+                    SOC Command Terminal
+                    <span style="font-size: 0.75rem; color: var(--purple);">Interactive</span>
+                </div>
+                <div id="soc-term-output" style="flex-grow: 1; background: rgba(0,0,0,0.4); border-radius: 8px; padding: 10px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; color: #a0a0a0; display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px;">
+                    <div style="color: var(--cyan);">CyFocus SOC Terminal v1.0</div>
+                    <div>Type 'help' for available commands.</div>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <span style="color: var(--cyan); font-family: monospace; font-weight: bold;">$</span>
+                    <input type="text" id="soc-cmd-input" placeholder="Enter command..." style="flex-grow: 1; background: rgba(0,0,0,0.5); border: 1px solid var(--border-subtle); color: #fff; padding: 8px 12px; border-radius: 6px; font-family: monospace; outline: none; transition: border-color 0.3s;" onkeydown="handleSocTerminal(event)">
+                </div>
+            </div>
+
+            <!-- TERMINAL SECTION -->
+            <div class="glass-card terminal-section">
+                <div class="section-title">
+                    Live Telemetry Feed
+                    <button id="pause-btn" class="control-btn" onclick="togglePause()" style="padding: 4px 10px; font-size: 0.75rem;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg> PAUSE
+                    </button>
+                </div>
+                
+                <div class="log-feed" id="logs">
+                    <div style="text-align: center; color: var(--text-muted); padding: 2rem; font-style: italic;">
+                        Establishing secure connection... waiting for telemetry.
+                    </div>
+                </div>
+            </div>
+
+            <!-- MITRE ATT&CK SECTION -->
+            <div class="glass-card mitre-section">
+                <div class="section-title">
+                    MITRE ATT&CK® Matrix
+                    <span style="font-size: 0.75rem; color: var(--text-secondary);">Enterprise</span>
+                </div>
+                <div class="mitre-grid">
+                    <div class="mitre-col"><div class="mitre-header">Recon</div><div id="T1595" class="mitre-cell">Active Scanning<span class="mitre-badge">0</span></div><div id="T1590" class="mitre-cell">Gather Victim Info<span class="mitre-badge">0</span></div></div>
+                    <div class="mitre-col"><div class="mitre-header">Resource Dev</div><div id="T1583" class="mitre-cell">Acquire Infrastructure<span class="mitre-badge">0</span></div><div id="T1587" class="mitre-cell">Develop Capabilities<span class="mitre-badge">0</span></div></div>
+                    <div class="mitre-col"><div class="mitre-header">Initial Access</div><div id="T1190" class="mitre-cell">Exploit Public-Facing App<span class="mitre-badge">0</span></div><div id="T1566" class="mitre-cell">Phishing<span class="mitre-badge">0</span></div></div>
+                    <div class="mitre-col"><div class="mitre-header">Execution</div><div id="T1059" class="mitre-cell">Command and Scripting<span class="mitre-badge">0</span></div><div id="T1053" class="mitre-cell">Scheduled Task<span class="mitre-badge">0</span></div></div>
+                    <div class="mitre-col"><div class="mitre-header">Persistence</div><div id="T1136" class="mitre-cell">Create Account<span class="mitre-badge">0</span></div><div id="T1547" class="mitre-cell">Boot or Logon Autostart<span class="mitre-badge">0</span></div></div>
+                    <div class="mitre-col"><div class="mitre-header">Privilege Esc</div><div id="T1068" class="mitre-cell">Exploit for Priv Esc<span class="mitre-badge">0</span></div><div id="T1548" class="mitre-cell">Abuse Elevation Control<span class="mitre-badge">0</span></div></div>
+                    <div class="mitre-col"><div class="mitre-header">Defense Evasion</div><div id="T1027" class="mitre-cell">Obfuscated Files<span class="mitre-badge">0</span></div><div id="T1562" class="mitre-cell">Impair Defenses<span class="mitre-badge">0</span></div></div>
+                    <div class="mitre-col"><div class="mitre-header">Credential Access</div><div id="T1110" class="mitre-cell">Brute Force<span class="mitre-badge">0</span></div><div id="T1003" class="mitre-cell">OS Credential Dumping<span class="mitre-badge">0</span></div></div>
+                    <div class="mitre-col"><div class="mitre-header">Discovery</div><div id="T1046" class="mitre-cell">Network Service Scanning<span class="mitre-badge">0</span></div><div id="T1082" class="mitre-cell">System Info Discovery<span class="mitre-badge">0</span></div></div>
+                    <div class="mitre-col"><div class="mitre-header">Lateral Movement</div><div id="T1021" class="mitre-cell">Remote Services<span class="mitre-badge">0</span></div><div id="T1210" class="mitre-cell">Exploitation for Lateral Movement<span class="mitre-badge">0</span></div></div>
+                    <div class="mitre-col"><div class="mitre-header">Collection</div><div id="T1005" class="mitre-cell">Data from Local System<span class="mitre-badge">0</span></div><div id="T1039" class="mitre-cell">Data from Network Shared Drive<span class="mitre-badge">0</span></div></div>
+                    <div class="mitre-col"><div class="mitre-header">Command & Control</div><div id="T1071" class="mitre-cell">Application Layer Protocol<span class="mitre-badge">0</span></div><div id="T1573" class="mitre-cell">Encrypted Channel<span class="mitre-badge">0</span></div></div>
+                    <div class="mitre-col"><div class="mitre-header">Exfiltration</div><div id="T1041" class="mitre-cell">Exfiltration Over C2<span class="mitre-badge">0</span></div><div id="T1020" class="mitre-cell">Automated Exfiltration<span class="mitre-badge">0</span></div></div>
+                    <div class="mitre-col"><div class="mitre-header">Impact</div><div id="T1565" class="mitre-cell">Data Manipulation<span class="mitre-badge">0</span></div><div id="T1498" class="mitre-cell">Endpoint Denial of Service<span class="mitre-badge">0</span></div></div>
+                </div>
+            </div>
+
+        </main>
+        
+        <!-- THREAT LOGS PLACEHOLDER -->
+        <main id="logs-content" class="dashboard-content" style="display: none; align-items: start;">
+            <div class="glass-card" style="grid-column: 1 / -1; width: 100%;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2 style="font-family: var(--font-display); color: var(--cyan); display: flex; align-items: center; gap: 0.5rem;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                        Full Threat Log Database
+                    </h2>
+                    <button class="btn" onclick="document.getElementById('full-logs-body').innerHTML=''">Clear View</button>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">
+                                <th style="padding: 1rem 0;">Time</th>
+                                <th style="padding: 1rem 0;">Source IP</th>
+                                <th style="padding: 1rem 0;">Severity</th>
+                                <th style="padding: 1rem 0;">Heuristic</th>
+                            </tr>
+                        </thead>
+                        <tbody id="full-logs-body">
+                            <tr>
+                                <td colspan="4" style="text-align: center; padding: 2rem; color: var(--text-muted);">Waiting for new threats...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <!-- SETTINGS PLACEHOLDER -->
+        <main id="settings-content" class="dashboard-content" style="display: none; align-items: center; justify-content: center;">
+            <div class="glass-card" style="max-width: 600px; width: 100%;">
+                <h2 style="font-family: var(--font-display); color: var(--purple); margin-bottom: 2rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    System Settings
+                </h2>
+                
+                <div style="margin-bottom: 2rem;">
+                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                        <div>
+                            <div style="font-weight: 600; margin-bottom: 0.25rem;">Active Protection</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Block malicious IPs automatically</div>
+                        </div>
+                        <input type="checkbox" checked style="accent-color: var(--cyan); width: 20px; height: 20px;">
+                    </label>
+                </div>
+
+                <div style="margin-bottom: 2rem;">
+                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                        <div>
+                            <div style="font-weight: 600; margin-bottom: 0.25rem;">Deep Packet Inspection</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Run heuristic analysis on payload</div>
+                        </div>
+                        <input type="checkbox" checked style="accent-color: var(--cyan); width: 20px; height: 20px;">
+                    </label>
+                </div>
+
+                <div style="margin-bottom: 2rem;">
+                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                        <div>
+                            <div style="font-weight: 600; margin-bottom: 0.25rem;">LLM Auto-Enrichment</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Generate playbooks for Critical threats</div>
+                        </div>
+                        <input type="checkbox" checked style="accent-color: var(--cyan); width: 20px; height: 20px;">
+                    </label>
+                </div>
+
+                <button class="btn" style="width: 100%; justify-content: center;" onclick="alert('Settings saved successfully!')">Save Configuration</button>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function switchTab(tabId, element) {
+            document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+            
+            document.getElementById('dashboard-content').style.display = 'none';
+            document.getElementById('logs-content').style.display = 'none';
+            document.getElementById('settings-content').style.display = 'none';
+            
+            if (tabId === 'dashboard') {
+                document.getElementById('dashboard-content').style.display = 'grid';
+            } else if (tabId === 'logs') {
+                document.getElementById('logs-content').style.display = 'flex';
+            } else if (tabId === 'settings') {
+                document.getElementById('settings-content').style.display = 'flex';
+            }
+        }
+        const socket = io(window.location.origin);
+        const logsContainer = document.getElementById('logs');
+        const totalElem = document.getElementById('stat-total');
+        const threatsElem = document.getElementById('stat-threats');
+        
+        let totalScans = 0;
+        let blockedThreats = 0;
+        let isFirstLog = true;
+        let uptimeSeconds = 0;
+        let threatChart = null;
+        let sparklineTotal = null;
+        let sparklineThreats = null;
+        let trafficHistory = Array(60).fill(0);
+        let threatHistory = Array(60).fill(0);
+        let threatDistribution = {};
+
+        // Chart.js Configuration for CyFocus Theme
+        const ctx = document.getElementById('threatChart').getContext('2d');
+        Chart.defaults.color = '#64748b';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        
+        function getChartColors() {
+            const isLight = document.body.classList.contains('light-mode');
+            return {
+                grid: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+                text: isLight ? '#64748b' : '#94a3b8'
+            };
+        }
+
+        function updateChart() {
+            const labels = Object.keys(threatDistribution).length > 0 ? Object.keys(threatDistribution) : ['No Threats'];
+            const data = Object.keys(threatDistribution).length > 0 ? Object.values(threatDistribution) : [1];
+            
+            // CyFocus Palette
+            const colors = ['#ff3366', '#FFD700', '#00f0ff', '#8a2be2', '#00E676'];
+            
+            let bgColors;
+            if (Object.keys(threatDistribution).length > 0) {
+                bgColors = Object.keys(threatDistribution).map((_, i) => colors[i % colors.length]);
+            } else {
+                bgColors = ['rgba(255, 255, 255, 0.02)'];
+            }
+
+            const c = getChartColors();
+            Chart.defaults.color = c.text;
+
+            if (threatChart) {
+                threatChart.data.labels = labels;
+                threatChart.data.datasets[0].data = data;
+                threatChart.data.datasets[0].backgroundColor = bgColors;
+                threatChart.options.scales.r.grid.color = c.grid;
+                threatChart.options.scales.r.angleLines.color = c.grid;
+                threatChart.update();
+            } else {
+                threatChart = new Chart(ctx, {
+                    type: 'polarArea',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: data,
+                            backgroundColor: bgColors,
+                            borderWidth: 0,
+                            hoverOffset: 10
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: { padding: 10 },
+                        scales: {
+                            r: {
+                                ticks: { display: false },
+                                grid: { color: c.grid },
+                                angleLines: { color: c.grid }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    font: { family: "'Inter', sans-serif", size: 11 },
+                                    usePointStyle: true,
+                                    padding: 20
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        
+        function initSparklines() {
+            const commonOptions = {
+                type: 'line',
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                    scales: {
+                        x: { display: false },
+                        y: { display: false, min: 0 }
+                    },
+                    elements: {
+                        point: { radius: 0 },
+                        line: { tension: 0.4, borderWidth: 2 }
+                    },
+                    animation: { duration: 0 }
+                }
+            };
+
+            const ctxTotal = document.getElementById('sparkline-total').getContext('2d');
+            sparklineTotal = new Chart(ctxTotal, {
+                ...commonOptions,
+                data: {
+                    labels: Array(60).fill(''),
+                    datasets: [{
+                        data: trafficHistory,
+                        borderColor: '#00f0ff',
+                        backgroundColor: 'rgba(0, 240, 255, 0.1)',
+                        fill: true
+                    }]
+                }
+            });
+
+            const ctxThreats = document.getElementById('sparkline-threats').getContext('2d');
+            sparklineThreats = new Chart(ctxThreats, {
+                ...commonOptions,
+                data: {
+                    labels: Array(60).fill(''),
+                    datasets: [{
+                        data: threatHistory,
+                        borderColor: '#ff3366',
+                        backgroundColor: 'rgba(255, 51, 102, 0.1)',
+                        fill: true
+                    }]
+                }
+            });
+            
+            // Start updating sparklines every second
+            setInterval(() => {
+                trafficHistory.shift();
+                trafficHistory.push(totalScans); // Or a delta, let's just show total or we need a delta?
+                // Wait, it's better to show velocity (delta per second)
+            }, 1000);
+        }
+
+        let lastTotal = 0;
+        let lastThreats = 0;
+
+        function startSparklineUpdates() {
+            initSparklines();
+            setInterval(() => {
+                const totalDelta = totalScans - lastTotal;
+                const threatDelta = blockedThreats - lastThreats;
+                
+                trafficHistory.shift();
+                trafficHistory.push(totalDelta);
+                
+                threatHistory.shift();
+                threatHistory.push(threatDelta);
+                
+                lastTotal = totalScans;
+                lastThreats = blockedThreats;
+                
+                if (sparklineTotal) sparklineTotal.update();
+                if (sparklineThreats) sparklineThreats.update();
+            }, 1000);
+        }
+
+        // Ensure chart is initialized empty
+        updateChart();
+        startSparklineUpdates();
+
+        // ── Theme Toggle ──────────────────────────────────────────────
+        const themeIcon = document.getElementById('theme-icon');
+        
+        function toggleTheme() {
+            document.body.classList.toggle('light-mode');
+            const isLight = document.body.classList.contains('light-mode');
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            
+            if (isLight) {
+                themeIcon.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+            } else {
+                themeIcon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+            }
+            updateChart();
+        }
+        
+        if (localStorage.getItem('theme') === 'light') {
+            document.body.classList.add('light-mode');
+            themeIcon.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+            updateChart();
+        }
+
+        // --- Time Machine Logic ---
+        async function handleTimeMachine(value) {
+            const numVal = parseInt(value);
+            const btn = document.getElementById('pause-btn');
+            const logsContainer = document.getElementById('telemetry-logs');
+            
+            if (numVal === 100) {
+                // Resume live
+                if (isPaused) togglePause();
+                logsContainer.innerHTML += `<div class="log-item" style="color:var(--cyan); border-left-color:var(--cyan);">>>> RESUMING LIVE TELEMETRY FEED <<<</div>`;
+            } else {
+                // Pause and load history
+                if (!isPaused) togglePause();
+                const minsAgo = 100 - numVal;
+                logsContainer.innerHTML = `<div class="log-item" style="color:var(--purple); border-left-color:var(--purple);">>>> TIME MACHINE: LOADING EVENTS FROM ${minsAgo} MINS AGO <<<</div>`;
+                
+                try {
+                    const res = await fetch(`/api/threats/history?minutes_ago=${minsAgo}`);
+                    const data = await res.json();
+                    
+                    if (data.events && data.events.length > 0) {
+                        data.events.reverse().forEach(ev => {
+                            const date = new Date(ev.timestamp);
+                            let bg = 'rgba(0,0,0,0.2)';
+                            let color = 'var(--text-primary)';
+                            if (ev.severity === 'High') { color = 'var(--yellow)'; bg = 'rgba(255, 215, 0, 0.05)'; }
+                            if (ev.severity === 'Critical') { color = 'var(--red)'; bg = 'rgba(255, 51, 102, 0.05)'; }
+                            
+                            const html = `
+                            <div class="log-item ${ev.severity === 'Critical' ? 'threat' : ''}" style="background: ${bg}; border-left-color: ${color}; opacity: 0.8;">
+                                <div style="display:flex; justify-content:space-between; margin-bottom: 5px;">
+                                    <span style="color: var(--text-secondary);">${date.toLocaleTimeString()} [HISTORICAL]</span>
+                                    <span style="color: ${color}; font-weight: bold;">[${ev.severity}] ${ev.threat_type}</span>
+                                </div>
+                                <div class="log-grid">
+                                    <div>SRC: <span>${ev.source_ip}</span></div>
+                                    <div>DST: <span>${ev.dest_ip}:${ev.dest_port}</span></div>
+                                </div>
+                            </div>`;
+                            logsContainer.innerHTML = html + logsContainer.innerHTML;
+                        });
+                    } else {
+                        logsContainer.innerHTML += `<div class="log-item">No historical events found for this timeframe.</div>`;
+                    }
+                } catch(e) {
+                    logsContainer.innerHTML += `<div class="log-item" style="color:var(--red);">Error loading history: ${e.message}</div>`;
+                }
+            }
+        }
+
+        // --- SOC Terminal Logic ---
+        let cmdHistory = [];
+        let cmdHistoryIdx = -1;
+
+        async function handleSocTerminal(event) {
+            const input = document.getElementById('soc-cmd-input');
+            const output = document.getElementById('soc-term-output');
+
+            // Handle Command History
+            if (event.key === 'ArrowUp') {
+                if (cmdHistory.length > 0 && cmdHistoryIdx < cmdHistory.length - 1) {
+                    cmdHistoryIdx++;
+                    input.value = cmdHistory[cmdHistory.length - 1 - cmdHistoryIdx];
+                }
+                event.preventDefault();
+                return;
+            } else if (event.key === 'ArrowDown') {
+                if (cmdHistoryIdx > 0) {
+                    cmdHistoryIdx--;
+                    input.value = cmdHistory[cmdHistory.length - 1 - cmdHistoryIdx];
+                } else if (cmdHistoryIdx === 0) {
+                    cmdHistoryIdx = -1;
+                    input.value = '';
+                }
+                event.preventDefault();
+                return;
+            }
+
+            if (event.key === 'Enter') {
+                const cmd = input.value.trim();
+                if (!cmd) return;
+                
+                // Add to history
+                cmdHistory.push(cmd);
+                if (cmdHistory.length > 100) cmdHistory.shift();
+                cmdHistoryIdx = -1;
+                
+                output.innerHTML += `<div><span style="color:var(--cyan);">$</span> ${escapeHTML(cmd)}</div>`;
+                input.value = '';
+                input.disabled = true; // Lock input while processing
+                
+                if (cmd.toLowerCase() === 'clear') {
+                    output.innerHTML = `<div style="color: var(--cyan);">CyFocus SOC Terminal v1.0</div><div>Type 'help' for available commands.</div>`;
+                    input.disabled = false;
+                    input.focus();
+                    return;
+                }
+                
+                const loadingId = 'loading-' + Date.now();
+                output.innerHTML += `<div id="${loadingId}"><span style="color:var(--yellow); opacity: 0.7; font-style: italic;">[Processing]...</span></div>`;
+                output.scrollTop = output.scrollHeight;
+                
+                try {
+                    const res = await fetch('/api/terminal/run', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ command: cmd })
+                    });
+                    const data = await res.json();
+                    
+                    const loader = document.getElementById(loadingId);
+                    if (loader) loader.remove();
+                    
+                    let outHtml = '';
+                    if (data.error) {
+                        outHtml = `<span style="color:var(--red);">${escapeHTML(data.error)}</span>`;
+                    } else if (data.result) {
+                        outHtml = `<pre style="margin:0; white-space:pre-wrap;">${escapeHTML(data.result)}</pre>`;
+                    }
+                    
+                    output.innerHTML += `<div>${outHtml}</div>`;
+                } catch (e) {
+                    const loader = document.getElementById(loadingId);
+                    if (loader) loader.remove();
+                    output.innerHTML += `<div style="color:var(--red);">Command failed: ${e.message}</div>`;
+                }
+                
+                input.disabled = false;
+                input.focus();
+                output.scrollTop = output.scrollHeight;
+            }
+        }
+
+        // ── PCAP Forensics Viewer ────────────────────────────────────────────────────────
+
+        // ── Socket Logic ──────────────────────────────────────────────
+        
+        setInterval(() => {
+            uptimeSeconds++;
+            const h = Math.floor(uptimeSeconds / 3600).toString().padStart(2, '0');
+            const m = Math.floor((uptimeSeconds % 3600) / 60).toString().padStart(2, '0');
+            const s = (uptimeSeconds % 60).toString().padStart(2, '0');
+            document.getElementById('uptime-display').textContent = `${h}:${m}:${s}`;
+        }, 1000);
+
+        socket.on('connect', () => { console.log('Connected to dashboard backend.'); });
+
+        let isPaused = false;
+        function togglePause() {
+            isPaused = !isPaused;
+            const btn = document.getElementById('pause-btn');
+            if (isPaused) {
+                btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> RESUME';
+                btn.style.color = 'var(--yellow)';
+                btn.style.borderColor = 'var(--yellow)';
+            } else {
+                btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg> PAUSE';
+                btn.style.color = '';
+                btn.style.borderColor = '';
+            }
+        }
+
+        const processedEventIds = new Set();
+        
+        let soundEnabled = true;
+        
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('sound-icon');
+            if (soundEnabled) {
+                icon.innerHTML = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>';
+            } else {
+                icon.innerHTML = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line>';
+            }
+        }
+        
+        function playAlertSound(severity) {
+            if (!soundEnabled) return;
+            // Only play for High or Critical
+            if (severity !== 'High' && severity !== 'Critical') return;
+            
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                
+                oscillator.type = severity === 'Critical' ? 'sawtooth' : 'square';
+                oscillator.frequency.setValueAtTime(severity === 'Critical' ? 1200 : 800, audioCtx.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.3);
+                
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.3);
+            } catch (e) {
+                console.error("Audio playback failed", e);
+            }
+        }
+
+        function processEvent(data) {
+            if (isPaused) return;
+            if (processedEventIds.has(data.id)) return;
+            processedEventIds.add(data.id);
+            
+            playAlertSound(data.severity);
+
+            // Light up MITRE cell (100% Accuracy via direct T-Code mapping)
+            if (data.mitre_technique) {
+                const el = document.getElementById(data.mitre_technique);
+                if (el) {
+                    const badge = el.querySelector('.mitre-badge');
+                    if (badge) {
+                        let count = parseInt(badge.textContent) || 0;
+                        count++;
+                        badge.textContent = count;
+                        badge.style.display = 'inline-block';
+                        
+                        // Increase background opacity based on hit count (Heatmap)
+                        let opacity = Math.min(0.8, count * 0.15);
+                        el.style.setProperty('--heat-opacity', opacity);
+                    }
+                    
+                    // Flash border for immediate visual feedback
+                    el.classList.add('active');
+                    setTimeout(() => el.classList.remove('active'), 500);
+                }
+            }
+            if (isFirstLog) {
+                logsContainer.innerHTML = '';
+                isFirstLog = false;
+            }
+
+            totalScans++;
+            totalElem.textContent = totalScans;
+
+            const method = data.method || '';
+            const isThreat = method.includes('GenAI') || method.includes('DPI') || method.includes('Machine Learning') || (data.severity && data.severity !== 'INFO' && data.severity !== 'NORMAL');
+            if (isThreat) {
+                blockedThreats++;
+                threatsElem.textContent = blockedThreats;
+                
+                threatDistribution[method] = (threatDistribution[method] || 0) + 1;
+                updateChart();
+            }
+
+            // Update D3 Topology Graph
+            const actualSource = data.source || data.source_ip || data.src_ip || 'Unknown';
+            const actualDest = data.destination || data.destination_ip || data.dst_ip || '127.0.0.1';
+            updateTopology(actualSource, actualDest, isThreat);
+
+            appendLog(data);
+        }
+
+        socket.on('new_event', function(data) {
+            processEvent(data);
+        });
+        
+        socket.on('terminal_alert', function(data) {
+            const out = document.getElementById('soc-term-output');
+            out.innerHTML += `<div style="color: var(--yellow); margin-top: 4px;">>>> [SYSTEM ALERT] ${escapeHTML(data.message)}</div>`;
+            out.scrollTop = out.scrollHeight;
+        });
+
+        // Robust fallback polling every 1.5s to ensure UI updates even if WebSockets are blocked
+        async function fetchEventsFallback() {
+            if (isPaused) return;
+            try {
+                const res = await fetch('/api/events');
+                if (res.ok) {
+                    const events = await res.json();
+                    // Process from oldest to newest to maintain order
+                    for (let i = events.length - 1; i >= 0; i--) {
+                        processEvent(events[i]);
+                    }
+                }
+            } catch (e) {
+                console.error("Polling error:", e);
+            }
+        }
+
+        // Fetch immediately on load, then poll
+        fetchEventsFallback();
+        setInterval(fetchEventsFallback, 1500);
+
+        socket.on('enrichment_ready', function(data) {
+            if (isPaused) return;
+            const eventDiv = document.getElementById('event-' + escapeHTML(data.id));
+            if (eventDiv) {
+                let llmDiv = eventDiv.querySelector('.llm-enrichment');
+                if (!llmDiv) {
+                    llmDiv = document.createElement('div');
+                    llmDiv.className = 'llm-enrichment';
+                    llmDiv.innerHTML = `<strong>AI Forensics:</strong> <span></span>`;
+                    eventDiv.appendChild(llmDiv);
+                }
+                llmDiv.querySelector('span').innerHTML = escapeHTML(data.enrichment).replace(/\n/g, '<br>');
+            }
+        });
+
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str.toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function appendLog(data) {
+            const method = data.method || '';
+            const isThreat = method.includes('GenAI') || method.includes('DPI') || method.includes('Machine Learning');
+            const div = document.createElement('div');
+            div.className = `log-item ${isThreat ? 'threat' : ''}`;
+            if (data.id) div.id = 'event-' + escapeHTML(data.id);
+            
+            const confValue = parseFloat(data.confidence) || 0;
+            const safeTime = escapeHTML(data.timestamp);
+            const safeMethod = escapeHTML(data.method);
+            const actualSource = data.source || data.source_ip || data.src_ip || '';
+            const actualDest = data.destination || data.destination_ip || data.dst_ip || 'N/A';
+            const safeSource = escapeHTML(actualSource) + (data.source_port ? ':' + escapeHTML(data.source_port) : '');
+            const safeDest = escapeHTML(actualDest) + (data.destination_port ? ':' + escapeHTML(data.destination_port) : '');
+            
+            div.innerHTML = `
+                <div class="log-header-row">
+                    <span class="log-time">${safeTime}</span>
+                    <span class="log-method">${safeMethod} (${confValue.toFixed(1)}% CONF)</span>
+                </div>
+                <div class="log-grid">
+                    <div>SRC: <span>${safeSource}</span></div>
+                    <div>DST: <span>${safeDest}</span></div>
+                    <div>PROT: <span>${escapeHTML(data.protocol || 'TCP')}</span></div>
+                    <div>SIZE: <span>${escapeHTML(data.packet_size || '0')} B</span></div>
+                </div>
+                <div class="log-reason">
+                    <strong>Intel:</strong> ${escapeHTML(data.intel)}
+                </div>
+                <div style="margin-top: 8px; display: flex; gap: 8px;">
+                    ${data.pcap_file ? `
+                    <button class="control-btn accent" onclick="viewPcap('${escapeHTML(data.pcap_file)}')">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        View PCAP
+                    </button>` : ''}
+                    <button class="control-btn" style="border-color: var(--yellow); color: var(--yellow);" onclick="runSoar('${escapeHTML(actualSource)}')">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        Investigate IP
+                    </button>
+                    ${isThreat ? `
+                    <button class="control-btn" style="border-color: var(--purple); color: var(--purple);" onclick="generateRule('${escapeHTML(actualSource)}')">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        Export Rule
+                    </button>
+                    ` : ''}
+                </div>
+                ${data.enrichment ? `
+                <div class="llm-enrichment">
+                    <strong>AI Forensics:</strong> <span>${escapeHTML(data.enrichment).replace(/\n/g, '<br>')}</span>
+                </div>` : ''}
+            `;
+            
+            logsContainer.insertBefore(div, logsContainer.firstChild);
+            
+            // Limit to 50 items to prevent DOM bloat
+            if(logsContainer.children.length > 50) {
+                logsContainer.lastChild.remove();
+            }
+
+            // Also append to full logs table if it's a threat
+            if (data.severity && data.severity !== 'INFO' && data.severity !== 'NORMAL') {
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid var(--border-color)';
+                const badgeClass = data.severity === 'CRITICAL' ? 'badge-red' : 'badge-yellow';
+                tr.innerHTML = `
+                    <td style="padding: 1rem 0;">${safeTime}</td>
+                    <td style="padding: 1rem 0; font-family: monospace;">${escapeHTML(data.source) || 'Unknown'}</td>
+                    <td style="padding: 1rem 0;">
+                        <span class="badge ${badgeClass}">${escapeHTML(data.severity)}</span>
+                    </td>
+                    <td style="padding: 1rem 0;">${safeMethod}</td>
+                `;
+                const tbody = document.getElementById('full-logs-body');
+                if (tbody) {
+                    // Remove waiting text if exists
+                    if (tbody.children.length === 1 && tbody.children[0].innerText.includes('Waiting')) {
+                        tbody.innerHTML = '';
+                    }
+                    tbody.insertBefore(tr, tbody.firstChild);
+                    if (tbody.children.length > 200) tbody.lastChild.remove();
+                }
+            }
+        }
+
+        // ── Report Download Functions ────────────────────────────────────
+        function downloadReport(btn, endpoint) {
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> GENERATING...';
+            btn.style.pointerEvents = 'none';
+            setTimeout(() => {
+                window.location.href = endpoint;
+                setTimeout(() => {
+                    btn.innerHTML = orig;
+                    btn.style.pointerEvents = 'auto';
+                }, 1000);
+            }, 100);
+        }
+        // ── D3.js Network Topology ──────────────────────────────────────
+        const topologyData = { nodes: [], links: [] };
+        let topoWidth = 300;
+        let topoHeight = 250;
+        let d3Initialized = false;
+        
+        const svg = d3.select("#network-topology").append("svg")
+            .attr("width", "100%")
+            .attr("height", "100%");
+
+        const simulation = d3.forceSimulation()
+            .force("link", d3.forceLink().id(d => d.id).distance(60))
+            .force("charge", d3.forceManyBody().strength(-150));
+
+        let link = svg.append("g").attr("class", "links").selectAll("line");
+        let node = svg.append("g").attr("class", "nodes").selectAll("circle");
+        let labels = svg.append("g").attr("class", "labels").selectAll("text");
+
+        const topoObserver = new ResizeObserver(entries => {
+            for (let entry of entries) {
+                if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
+                    topoWidth = entry.contentRect.width;
+                    topoHeight = entry.contentRect.height;
+                    svg.attr("viewBox", [0, 0, topoWidth, topoHeight]);
+                    simulation.force("center", d3.forceCenter(topoWidth / 2, topoHeight / 2));
+                    
+                    if (!d3Initialized) {
+                        d3Initialized = true;
+                        simulation.alpha(1).restart();
+                    }
+                }
+            }
+        });
+        topoObserver.observe(document.getElementById('network-topology'));
+
+        function updateTopology(source, dest, isThreat) {
+            if (!source || !dest) return;
+
+            // Add nodes
+            if (!topologyData.nodes.find(n => n.id === source)) {
+                topologyData.nodes.push({ id: source, group: isThreat ? "threat" : "normal" });
+            } else if (isThreat) {
+                topologyData.nodes.find(n => n.id === source).group = "threat";
+            }
+
+            if (!topologyData.nodes.find(n => n.id === dest)) {
+                topologyData.nodes.push({ id: dest, group: "target" });
+            }
+
+            // Add links
+            const linkId = `${source}-${dest}`;
+            if (!topologyData.links.find(l => l.source.id === source && l.target.id === dest || l.source === source && l.target === dest)) {
+                topologyData.links.push({ source: source, target: dest });
+            }
+
+            // Limit nodes to prevent lag
+            if (topologyData.nodes.length > 50) {
+                topologyData.nodes.shift();
+                topologyData.links = topologyData.links.filter(l => topologyData.nodes.find(n => n.id === (l.source.id || l.source)) && topologyData.nodes.find(n => n.id === (l.target.id || l.target)));
+            }
+
+            // Bind data
+            link = link.data(topologyData.links, d => `${d.source.id || d.source}-${d.target.id || d.target}`);
+            link.exit().remove();
+            const linkEnter = link.enter().append("line")
+                .attr("stroke", "rgba(255,255,255,0.2)")
+                .attr("stroke-width", 1.5);
+            link = linkEnter.merge(link);
+
+            node = node.data(topologyData.nodes, d => d.id);
+            node.exit().remove();
+            const nodeEnter = node.enter().append("circle")
+                .attr("r", 6)
+                .attr("fill", d => d.group === 'threat' ? '#ff3366' : (d.group === 'target' ? '#00E676' : '#00f0ff'))
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended));
+            node = nodeEnter.merge(node);
+
+            labels = labels.data(topologyData.nodes, d => d.id);
+            labels.exit().remove();
+            const labelsEnter = labels.enter().append("text")
+                .text(d => d.id)
+                .attr("font-size", "8px")
+                .attr("fill", "var(--text-secondary)")
+                .attr("dx", 8)
+                .attr("dy", 3);
+            labels = labelsEnter.merge(labels);
+
+            simulation.nodes(topologyData.nodes).on("tick", ticked);
+            simulation.force("link").links(topologyData.links);
+            simulation.alpha(1).restart();
+        }
+
+        function ticked() {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+            node
+                .attr("cx", d => d.x = Math.max(6, Math.min(topoWidth - 6, d.x)))
+                .attr("cy", d => d.y = Math.max(6, Math.min(topoHeight - 6, d.y)));
+            labels
+                .attr("x", d => d.x)
+                .attr("y", d => d.y);
+        }
+
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        // 🌐 Globe.GL 3D Threat Map
+        let globe;
+        const arcsData = [];
+        const myServerLoc = { lat: 37.7749, lon: -122.4194 };
+        let globeInitialized = false;
+
+        function initGlobe() {
+            const globeElem = document.getElementById('globe-viz');
+            if (!globeElem) { console.error('Globe container not found'); return; }
+
+            // Check if Globe is available
+            if (typeof Globe === 'undefined') {
+                console.error('Globe.gl library not loaded');
+                renderFallbackMap(globeElem);
+                return;
+            }
+
+            const globeObserver = new ResizeObserver(entries => {
+                for (let entry of entries) {
+                    if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
+                        if (!globeInitialized) {
+                            globeInitialized = true;
+                            try {
+                                const myGlobe = Globe();
+                                globe = myGlobe(globeElem)
+                                    .globeImageUrl('/static/earth-dark.jpg')
+                                    .bumpImageUrl('/static/earth-topology.png')
+                                    .backgroundColor('rgba(0,0,0,0)')
+                                    .arcColor('color')
+                                    .arcDashLength(0.4)
+                                    .arcDashGap(0.2)
+                                    .arcDashAnimateTime(1500)
+                                    .arcsData([])
+                                    .pointColor('color')
+                                    .pointsData([
+                                        { lat: myServerLoc.lat, lng: myServerLoc.lon, size: 0.1, color: '#00E676' }
+                                    ])
+                                    .pointAltitude('size');
+
+                                globe.controls().autoRotate = true;
+                                globe.controls().autoRotateSpeed = 1.2;
+                                globe.pointOfView({ lat: 20, lng: -50, altitude: 2.5 });
+                                
+                                console.log('Globe initialized successfully');
+                            } catch (e) {
+                                console.error('Globe init failed:', e);
+                                renderFallbackMap(globeElem);
+                            }
+                        }
+                        if (globe) {
+                            globe.width(entry.contentRect.width);
+                            globe.height(entry.contentRect.height);
+                        }
+                    }
+                }
+            });
+            globeObserver.observe(globeElem);
+        }
+
+        function renderFallbackMap(container) {
+            container.innerHTML = `
+                <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+                    background:radial-gradient(circle at 50% 50%, #1a2744 0%, #0B0F19 100%);border-radius:50%;
+                    max-width:280px;max-height:280px;margin:auto;position:relative;overflow:hidden;">
+                    <div style="position:absolute;width:100%;height:100%;border-radius:50%;
+                        background:conic-gradient(from 0deg, rgba(0,230,118,0.1), rgba(255,51,102,0.1), rgba(0,176,255,0.1), rgba(0,230,118,0.1));
+                        animation:spin 20s linear infinite;"></div>
+                    <span style="color:var(--text-secondary);font-size:0.8rem;z-index:1;text-align:center;padding:1rem;">
+                        🌐 3D Globe<br><small style="color:var(--text-muted);">WebGL required</small>
+                    </span>
+                </div>
+                <style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>`;
+        }
+
+        setTimeout(initGlobe, 800);
+
+        // Handle geoip updates from the dashboard
+        socket.on('geoip_update', function(data) {
+            if (isPaused || !globe) return;
+            
+            const lat = data.geo.lat;
+            const lon = data.geo.lon;
+            
+            if (lat && lon) {
+                const arc = {
+                    startLat: lat,
+                    startLng: lon,
+                    endLat: myServerLoc.lat,
+                    endLng: myServerLoc.lon,
+                    color: ['rgba(255, 51, 102, 0.1)', 'rgba(255, 51, 102, 1)'] // Red gradient
+                };
+                
+                arcsData.push(arc);
+                if (arcsData.length > 30) arcsData.shift(); // Keep last 30 arcs to avoid clutter
+                
+                globe.arcsData(arcsData);
+
+                // Add point for attacker
+                const pts = globe.pointsData();
+                pts.push({ lat: lat, lng: lon, size: 0.05, color: '#ff3366' });
+                if (pts.length > 50) pts.splice(1, 1); // Keep target point at index 0
+                globe.pointsData(pts);
+            }
+        });
+
+        // "?"? PCAP Forensics Viewer "?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?
+        async function viewPcap(pcapFile) {
+            const modal = document.getElementById('pcap-modal');
+            const content = document.getElementById('pcap-content');
+            modal.style.display = 'flex';
+            content.innerHTML = 'Loading forensics data...';
+            
+            try {
+                const response = await fetch(`/api/forensics/pcap?file=${encodeURIComponent(pcapFile)}`);
+                const data = await response.json();
+                if (data.error) {
+                    content.innerHTML = `<span style="color: var(--red);">Error: ${data.error}</span>`;
+                } else {
+                    content.innerHTML = `<pre style="color: var(--cyan); white-space: pre-wrap; font-family: monospace; font-size: 0.8rem;">${data.hex}</pre>`;
+                }
+            } catch (err) {
+                content.innerHTML = `<span style="color: var(--red);">Request failed: ${err}</span>`;
+            }
+        }
+        
+        function closePcapModal() {
+            document.getElementById('pcap-modal').style.display = 'none';
+        }
+
+        // "?"? SOAR Playbook UI "?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?
+        async function runSoar(ip) {
+            const modal = document.getElementById('soar-modal');
+            const content = document.getElementById('soar-content');
+            modal.style.display = 'flex';
+            content.innerHTML = `<div style="color: var(--yellow);">Executing Automated Nmap Profile against ${escapeHTML(ip)}...</div>`;
+            
+            try {
+                const response = await fetch('/api/soar/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ip: ip })
+                });
+                const data = await response.json();
+                if (data.error) {
+                    content.innerHTML += `<br><span style="color: var(--red);">Error: ${data.error}</span>`;
+                } else {
+                    content.innerHTML += `<br><pre style="color: var(--green); white-space: pre-wrap; font-family: monospace; font-size: 0.8rem;">${escapeHTML(data.output)}</pre>`;
+                }
+            } catch (err) {
+                content.innerHTML += `<br><span style="color: var(--red);">Request failed: ${err}</span>`;
+            }
+        }
+        
+        function closeSoarModal() {
+            document.getElementById('soar-modal').style.display = 'none';
+        }
+
+        // "?"? Rule Generator UI "?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?"?
+        async function generateRule(ip) {
+            const modal = document.getElementById('rule-modal');
+            const content = document.getElementById('rule-content');
+            modal.style.display = 'flex';
+            content.innerHTML = `<div style="color: var(--purple);">Generating IDS/IPS rule for ${escapeHTML(ip)}...</div>`;
+            
+            try {
+                const response = await fetch('/api/generate-rule', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ip: ip })
+                });
+                const data = await response.json();
+                if (data.error) {
+                    content.innerHTML = `<span style="color: var(--red);">Error: ${data.error}</span>`;
+                } else {
+                    content.innerHTML = `
+                        <div style="margin-bottom: 1rem; color: var(--text-secondary);">Format: ${escapeHTML(data.format).toUpperCase()}</div>
+                        <pre style="color: var(--cyan); white-space: pre-wrap; font-family: monospace; font-size: 0.9rem; background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-subtle);">${escapeHTML(data.rule)}</pre>
+                        <button class="btn control-btn accent" style="margin-top: 1rem; width: 100%; justify-content: center;" onclick="navigator.clipboard.writeText('${escapeHTML(data.rule).replace(/'/g, "\\'")}'); alert('Rule copied to clipboard!');">Copy to Clipboard</button>
+                    `;
+                }
+            } catch (err) {
+                content.innerHTML = `<span style="color: var(--red);">Request failed: ${err}</span>`;
+            }
+        }
+        
+        function closeRuleModal() {
+            document.getElementById('rule-modal').style.display = 'none';
+        }
+
+        // === Signature Builder UI ===
+        function openBuilderModal() {
+            document.getElementById('builder-modal').style.display = 'flex';
+        }
+        async function saveSignature() {
+            const name = document.getElementById('builder-name').value;
+            const port = document.getElementById('builder-port').value;
+            const severity = document.getElementById('builder-severity').value;
+            const pattern = document.getElementById('builder-pattern').value;
+            const category = document.getElementById('builder-category').value;
+            
+            if (!name || !pattern || !category) {
+                alert("Please fill in Name, Pattern, and Category.");
+                return;
+            }
+            
+            const payload = {
+                name: name,
+                port: port ? parseInt(port) : null,
+                severity: severity,
+                pattern: pattern,
+                category: category
+            };
+            
+            try {
+                const res = await fetch('/api/signatures/add', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Signature Saved & Deployed to DPI Engine!');
+                    document.getElementById('builder-modal').style.display = 'none';
+                    // clear inputs
+                    document.getElementById('builder-name').value = '';
+                    document.getElementById('builder-port').value = '';
+                    document.getElementById('builder-pattern').value = '';
+                    document.getElementById('builder-category').value = '';
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch(e) {
+                alert('Error saving signature.');
+            }
+        }
+
+        // === Signatures UI ===
+        async function viewSignatures() {
+            const modal = document.getElementById('signatures-modal');
+            const tbody = document.getElementById('signatures-body');
+            modal.style.display = 'flex';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Loading signatures...</td></tr>';
+            
+            try {
+                const response = await fetch('/api/signatures');
+                const data = await response.json();
+                if (data.error) {
+                    tbody.innerHTML = `<tr><td colspan="4" style="color: var(--red);">${data.error}</td></tr>`;
+                } else {
+                    tbody.innerHTML = '';
+                    data.signatures.forEach(sig => {
+                        const tr = document.createElement('tr');
+                        tr.style.borderBottom = '1px solid var(--border-color)';
+                        const badgeClass = sig.severity === 'Critical' ? 'badge-red' : (sig.severity === 'High' ? 'badge-yellow' : 'badge-green');
+                        tr.innerHTML = `
+                            <td style="padding: 1rem 0; font-family: monospace; color: var(--cyan);">${escapeHTML(sig.id)}</td>
+                            <td style="padding: 1rem 0;">${escapeHTML(sig.name)}</td>
+                            <td style="padding: 1rem 0;"><span class="badge ${badgeClass}">${escapeHTML(sig.severity)}</span></td>
+                            <td style="padding: 1rem 0; color: var(--text-secondary);">${escapeHTML(sig.cwe)}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="4" style="color: var(--red);">Request failed: ${err}</td></tr>`;
+            }
+        }
+        
+        function closeSignaturesModal() {
+            document.getElementById('signatures-modal').style.display = 'none';
+        }
+
+    </script>
+
+    <!-- PCAP Modal HTML -->
+    <div id="pcap-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
+        <div style="background: var(--bg-base); border: 1px solid var(--border-glow); border-radius: 12px; width: 80%; height: 80%; display: flex; flex-direction: column; box-shadow: 0 0 30px rgba(0,240,255,0.2);">
+            <div style="padding: 1rem 2rem; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="color: var(--cyan); font-family: var(--font-display);">Packet Capture (Hex Dump)</h3>
+                <button onclick="closePcapModal()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">&times;</button>
+            </div>
+            <div id="pcap-content" style="padding: 2rem; overflow-y: auto; flex-grow: 1;"></div>
+        </div>
+    </div>
+
+    <!-- SOAR Modal HTML -->
+    <div id="soar-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
+        <div style="background: var(--bg-base); border: 1px solid rgba(255, 215, 0, 0.4); border-radius: 12px; width: 70%; height: 70%; display: flex; flex-direction: column; box-shadow: 0 0 30px rgba(255,215,0,0.1);">
+            <div style="padding: 1rem 2rem; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="color: var(--yellow); font-family: var(--font-display);">SOAR Playbook Execution</h3>
+                <button onclick="closeSoarModal()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">&times;</button>
+            </div>
+            <div id="soar-content" style="padding: 2rem; overflow-y: auto; flex-grow: 1;"></div>
+        </div>
+    </div>
+
+    <!-- Signatures Modal HTML -->
+    <div id="signatures-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
+        <div style="background: var(--bg-base); border: 1px solid var(--border-glow); border-radius: 12px; width: 70%; height: 70%; display: flex; flex-direction: column; box-shadow: 0 0 30px rgba(0,240,255,0.2);">
+            <div style="padding: 1rem 2rem; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="color: var(--cyan); font-family: var(--font-display);">Active DPI Signatures</h3>
+                <button onclick="closeSignaturesModal()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">&times;</button>
+            </div>
+            <div style="padding: 2rem; overflow-y: auto; flex-grow: 1;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border-glow); color: var(--text-secondary);">
+                            <th style="padding-bottom: 1rem; width: 15%;">Rule ID</th>
+                            <th style="padding-bottom: 1rem; width: 50%;">Signature Name</th>
+                            <th style="padding-bottom: 1rem; width: 15%;">Severity</th>
+                            <th style="padding-bottom: 1rem; width: 20%;">CWE Ref</th>
+                        </tr>
+                    </thead>
+                    <tbody id="signatures-body">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rule Modal HTML -->
+    <div id="rule-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
+        <div style="background: var(--bg-base); border: 1px solid rgba(138, 43, 226, 0.4); border-radius: 12px; width: 60%; max-height: 70%; display: flex; flex-direction: column; box-shadow: 0 0 30px rgba(138,43,226,0.1);">
+            <div style="padding: 1rem 2rem; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="color: var(--purple); font-family: var(--font-display);">Generated IDS/IPS Rule</h3>
+                <button onclick="closeRuleModal()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">&times;</button>
+            </div>
+            <div id="rule-content" style="padding: 2rem; overflow-y: auto; flex-grow: 1;"></div>
+        </div>
+    </div>
+
+    <!-- Builder Modal HTML -->
+    <div id="builder-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center; backdrop-filter: blur(5px);">
+        <div style="background: var(--bg-base); border: 1px solid var(--border-glow); border-radius: 12px; width: 60%; max-height: 80%; display: flex; flex-direction: column; box-shadow: 0 0 30px rgba(0,240,255,0.2);">
+            <div style="padding: 1rem 2rem; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="color: var(--cyan); font-family: var(--font-display);">Custom Threat Signature Builder</h3>
+                <button onclick="document.getElementById('builder-modal').style.display='none'" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">&times;</button>
+            </div>
+            <div style="padding: 2rem; overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 1rem;">
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <label style="color: var(--text-secondary); font-size: 0.8rem;">Rule Name</label>
+                    <input type="text" id="builder-name" placeholder="e.g. Detect Admin Login" style="background: rgba(0,0,0,0.5); border: 1px solid var(--border-subtle); color: #fff; padding: 8px 12px; border-radius: 6px; font-family: monospace; outline: none;">
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1;">
+                        <label style="color: var(--text-secondary); font-size: 0.8rem;">Target Port</label>
+                        <input type="text" id="builder-port" placeholder="e.g. 80" style="background: rgba(0,0,0,0.5); border: 1px solid var(--border-subtle); color: #fff; padding: 8px 12px; border-radius: 6px; font-family: monospace; outline: none;">
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1;">
+                        <label style="color: var(--text-secondary); font-size: 0.8rem;">Severity</label>
+                        <select id="builder-severity" style="background: rgba(0,0,0,0.5); border: 1px solid var(--border-subtle); color: #fff; padding: 8px 12px; border-radius: 6px; font-family: monospace; outline: none;">
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                            <option value="Critical">Critical</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <label style="color: var(--text-secondary); font-size: 0.8rem;">Payload Pattern (String/Regex)</label>
+                    <input type="text" id="builder-pattern" placeholder="e.g. admin=true" style="background: rgba(0,0,0,0.5); border: 1px solid var(--border-subtle); color: #fff; padding: 8px 12px; border-radius: 6px; font-family: monospace; outline: none;">
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <label style="color: var(--text-secondary); font-size: 0.8rem;">Threat Category</label>
+                    <input type="text" id="builder-category" placeholder="e.g. Custom Exploit" style="background: rgba(0,0,0,0.5); border: 1px solid var(--border-subtle); color: #fff; padding: 8px 12px; border-radius: 6px; font-family: monospace; outline: none;">
+                </div>
+                <button onclick="saveSignature()" style="margin-top: 1rem; background: var(--cyan); color: #000; font-weight: bold; padding: 10px; border-radius: 6px; border: none; cursor: pointer;">Save Signature</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI CHATBOT WIDGET -->
+    <style>
+        .ai-chat-widget {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 350px;
+            background: rgba(10, 15, 30, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,240,255,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+        .ai-chat-widget.minimized {
+            height: 50px;
+        }
+        .ai-chat-widget:not(.minimized) {
+            height: 450px;
+        }
+        .ai-chat-header {
+            padding: 12px 15px;
+            background: rgba(0, 240, 255, 0.1);
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            font-family: var(--font-display);
+            color: var(--cyan);
+        }
+        .ai-chat-body {
+            flex-grow: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .ai-msg {
+            max-width: 85%;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+        .ai-msg.bot {
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            align-self: flex-start;
+            color: #f8fafc;
+        }
+        .ai-msg.user {
+            background: rgba(255, 255, 255, 0.1);
+            align-self: flex-end;
+            color: #fff;
+        }
+        .ai-chat-input {
+            padding: 10px;
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            gap: 8px;
+        }
+        .ai-chat-input input {
+            flex-grow: 1;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
+            color: white;
+            padding: 8px;
+            outline: none;
+            font-family: var(--font-main);
+        }
+        .ai-chat-input button {
+            background: var(--cyan);
+            color: black;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+    </style>
+    <div class="ai-chat-widget minimized" id="ai-chat-widget">
+        <div class="ai-chat-header" onclick="toggleChat()">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                AI Cyber Assistant
+            </div>
+            <span id="chat-toggle-icon">▲</span>
+        </div>
+        <div class="ai-chat-body" id="ai-chat-body">
+            <div class="ai-msg bot">Hello! I am your CyFocus AI Assistant. Ask me anything about the ongoing threats or how to mitigate them.</div>
+        </div>
+        <div class="ai-chat-input">
+            <input type="text" id="ai-chat-input" placeholder="Ask AI analyst..." onkeydown="if(event.key === 'Enter') sendChatMessage()">
+            <button onclick="sendChatMessage()">SEND</button>
+        </div>
+    </div>
+    
+    <script>
+        function toggleChat() {
+            const widget = document.getElementById('ai-chat-widget');
+            const icon = document.getElementById('chat-toggle-icon');
+            if (widget.classList.contains('minimized')) {
+                widget.classList.remove('minimized');
+                icon.innerText = '▼';
+            } else {
+                widget.classList.add('minimized');
+                icon.innerText = '▲';
+            }
+        }
+        
+        async function sendChatMessage() {
+            const input = document.getElementById('ai-chat-input');
+            const msg = input.value.trim();
+            if (!msg) return;
+            
+            input.value = '';
+            const body = document.getElementById('ai-chat-body');
+            
+            body.innerHTML += `<div class="ai-msg user">${escapeHTML(msg)}</div>`;
+            body.scrollTop = body.scrollHeight;
+            
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ message: msg })
+                });
+                const data = await res.json();
+                if (data.error) {
+                    body.innerHTML += `<div class="ai-msg bot" style="color:var(--red);">System Error: ${data.error}</div>`;
+                } else {
+                    body.innerHTML += `<div class="ai-msg bot">${data.reply}</div>`;
+                }
+            } catch (e) {
+                body.innerHTML += `<div class="ai-msg bot" style="color:var(--red);">Error connecting to AI.</div>`;
+            }
+            body.scrollTop = body.scrollHeight;
+        }
+    </script>
+</body>
+</html>

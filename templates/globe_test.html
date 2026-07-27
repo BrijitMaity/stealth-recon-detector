@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Globe Test</title>
+    <script src="https://unpkg.com/globe.gl"></script>
+</head>
+<body>
+<div id="globe-viz" style="width:400px;height:400px;"></div>
+<div id="status">Loading...</div>
+<script>
+try {
+    const elem = document.getElementById('globe-viz');
+    const globe = Globe()
+        (elem)
+        .globeImageUrl('https://raw.githubusercontent.com/vasturiano/three-globe/master/example/img/earth-dark.jpg')
+        .bumpImageUrl('https://raw.githubusercontent.com/vasturiano/three-globe/master/example/img/earth-topology.png')
+        .backgroundColor('rgba(0,0,0,0)')
+        .pointsData([{lat: 37.7, lng: -122.4, size: 0.1, color: '#00E676'}])
+        .pointColor('color')
+        .pointAltitude('size');
+    
+    globe.controls().autoRotate = true;
+    globe.controls().autoRotateSpeed = 1.2;
+    
+    document.getElementById('status').textContent = 'Globe loaded successfully! Type: ' + typeof globe;
+} catch(e) {
+    document.getElementById('status').textContent = 'ERROR: ' + e.message;
+}
+</script>
+</body>
+</html>

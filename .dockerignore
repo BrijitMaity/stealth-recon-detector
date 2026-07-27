@@ -1,0 +1,59 @@
+# ── Build Artifacts ────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# ── Virtual Environments ──────────────────────────────────────────
+venv/
+venv2/
+venv_broken/
+venv_fix/
+venv_new/
+.venv/
+env/
+
+# ── Version Control ───────────────────────────────────────────────
+.git/
+.gitignore
+.github/
+
+# ── IDE / Editor ──────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Data Files (DO NOT ship in container) ─────────────────────────
+*.csv
+*.csv.*
+*.json
+*.xlsx
+*.log
+*.log.*
+*.pcap
+pcap_archive/
+
+# ── Database Files (mounted as volumes instead) ──────────────────
+*.db
+*.db-shm
+*.db-wal
+
+# ── Model Backups ─────────────────────────────────────────────────
+*.backup
+*.archived
+
+# ── Documentation ─────────────────────────────────────────────────
+*.md
+*.txt
+LICENSE
+
+# ── Tests ─────────────────────────────────────────────────────────
+tests/
+
+# ── Docker ────────────────────────────────────────────────────────
+Dockerfile
+docker-compose.yml
+.dockerignore

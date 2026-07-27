@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  soc_engine:
+    build: .
+    container_name: stealth_soc_engine
+    # To run scapy network sniffing effectively, Docker requires elevated privileges
+    privileged: true
+    network_mode: "host" # Use host networking to sniff true interface traffic
+    environment:
+      - DASHBOARD_PORT=5000
+      - DASHBOARD_HOST=0.0.0.0
+      - AI_SENSITIVITY=0.8
+      - LOG_LEVEL=INFO
+      # - JWT_SECRET=your_secure_secret_here
+    volumes:
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+      - ./reports:/app/reports
+      - ./threat_events.db:/app/threat_events.db
+    restart: unless-stopped
