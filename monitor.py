@@ -416,6 +416,19 @@ class StealthMonitor:
             raw_packet = self._last_packet.get(src_ip)
         real_features = self.feature_extractor.extract(raw_packet, flow)
 
+        feat_dict = {
+            "Connection_Count": real_features["Connection_Count"],
+            "Duration": real_features["Duration"],
+            "Rate": real_features["Rate"],
+            "Unique_Ports": real_features["Unique_Ports"],
+            "Is_Port_Scan": real_features["Is_Port_Scan"],
+            "Is_Night": real_features["Is_Night"],
+            "Payload_Entropy": real_features["Payload_Entropy"],
+            "Packet_Size": real_features["Packet_Size"],
+            "Connection_Interval": real_features["Connection_Interval"],
+            "SYN_Count": real_features["SYN_Count"]
+        }
+
         now = datetime.datetime.now()
         is_night = real_features["Is_Night"]
         packet_size = real_features["Packet_Size"]
@@ -460,18 +473,6 @@ class StealthMonitor:
 
         # 2. Industry-Level Machine Learning Check
         elif unique_ports > cfg.UNIQUE_PORT_THRESHOLD or packets > cfg.PACKET_COUNT_THRESHOLD:
-            feat_dict = {
-                "Connection_Count": real_features["Connection_Count"],
-                "Duration": real_features["Duration"],
-                "Rate": real_features["Rate"],
-                "Unique_Ports": real_features["Unique_Ports"],
-                "Is_Port_Scan": real_features["Is_Port_Scan"],
-                "Is_Night": real_features["Is_Night"],
-                "Payload_Entropy": real_features["Payload_Entropy"],
-                "Packet_Size": real_features["Packet_Size"],
-                "Connection_Interval": real_features["Connection_Interval"],
-                "SYN_Count": real_features["SYN_Count"]
-            }
             ml_result = self.analyzer.analyze_features(feat_dict)
             if ml_result["is_threat"]:
                 method = "Machine Learning (Random Forest)"
